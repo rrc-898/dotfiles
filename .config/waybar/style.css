@@ -60,6 +60,19 @@ window#waybar {
     padding: 0 10px;
 }
 
+/* Ajustes (botón: abre la ventana de quickshell al hacer clic) */
+#custom-settings {
+    color: @wb_text;
+    font-size: 13px;
+    padding: 0 4px 0 10px;
+    margin: 0 2px;
+    transition: font-size 0.15s ease;
+}
+
+#custom-settings:hover {
+    font-size: 15px;
+}
+
 /* Clock */
 #clock {
     color: @wb_text;

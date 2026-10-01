@@ -5,7 +5,7 @@
     "spacing": 0,
 
     "modules-left": ["cpu", "custom/gpu", "memory", "hyprland/workspaces"],
-    "modules-center": ["clock"],
+    "modules-center": ["custom/settings", "clock"],
     "modules-right": ["custom/mpris-marquee", "pulseaudio", "network", "custom/power"],
 
     "cpu": {
@@ -91,6 +91,13 @@
         "format-disconnected": "󰖪",
         "tooltip-format": "{ifname}\n{essid}\nSignal: {signalStrength}%",
         "on-click": "qs ipc call settings network"
+    },
+
+    "custom/settings": {
+        "format": "󰒓",
+        "tooltip": true,
+        "tooltip-format": "Ajustes",
+        "on-click": "qs ipc call settings toggle"
     },
 
     "custom/power": {

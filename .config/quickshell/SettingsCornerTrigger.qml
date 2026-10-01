@@ -6,7 +6,7 @@ Item {
     id: root
     // top left corner: wlogout - top center: settings, rofi, wallpaper picker - top right: logoutmenu
     property bool hyprlockEnabled: true 
-    property bool settingsEnabled: true
+    property bool settingsEnabled: false  // ahora es el botón custom/settings de waybar
     property bool rofiEnabled: false
     property bool wallpaperEnabled: false
     property bool wlogoutEnabled: true

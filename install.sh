@@ -129,7 +129,9 @@ mapfile -t PACKAGES < <(
 install_nerd_font() {
     # $1 = family name as fc-list reports it, $2 = nerd-fonts release asset
     local family="$1" asset="$2" dir tmp
-    if fc-list : family | grep -qi "^$family"; then
+    # fc-list does the match itself: piping into grep -q would SIGPIPE
+    # fc-list and, under pipefail, report "missing" for installed fonts
+    if [[ -n "$(fc-list "$family" family)" ]]; then
         info "$family already installed."
         return
     fi

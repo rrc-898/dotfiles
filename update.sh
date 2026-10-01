@@ -6,7 +6,8 @@ set -uo pipefail
 #
 # Fast-path sync for iterating on the dotfiles after the initial install.sh
 # run. It:
-#   1. Installs any packages from packages.txt that are not installed yet
+#   1. Installs any packages from packages.txt (packages-fedora.txt on
+#      Fedora) that are not installed yet
 #   2. Compares every file in the repo's .config (and .zshrc) with what is
 #      installed, and prints exactly which files are NEW or UPDATED
 #   3. Backs up only the files it is about to overwrite
@@ -37,6 +38,13 @@ BACKUP_ROOT="$HOME/.config-backups"
 TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
 BACKUP_DIR="$BACKUP_ROOT/update-$TIMESTAMP"
 KEEP_BACKUPS=5
+SUDO="${SUDO:-sudo}"
+
+IS_FEDORA=0
+if [[ -r /etc/os-release ]] && grep -q '^ID=fedora' /etc/os-release; then
+    IS_FEDORA=1
+    PACKAGE_FILE="$REPO_DIR/packages-fedora.txt"
+fi
 
 DRY_RUN=0
 SHOW_DIFF=0
@@ -86,6 +94,28 @@ UNKNOWN_PACKAGES=()
 
 if [[ "$SKIP_PACKAGES" -eq 1 ]]; then
     info "Skipping package installation (--skip-packages)."
+elif [[ "$IS_FEDORA" -eq 1 ]]; then
+    mapfile -t PACKAGES < <(grep -vE '^[[:space:]]*(#|$)' "$PACKAGE_FILE")
+    MISSING=()
+    for pkg in "${PACKAGES[@]}"; do
+        rpm -q --whatprovides "$pkg" >/dev/null 2>&1 || MISSING+=("$pkg")
+    done
+
+    if [[ "${#MISSING[@]}" -eq 0 ]]; then
+        info "Packages: everything in packages-fedora.txt is already installed."
+    elif [[ "$DRY_RUN" -eq 1 ]]; then
+        info "Packages that would be installed (${#MISSING[@]}): ${MISSING[*]}"
+    else
+        info "Installing new packages with dnf: ${MISSING[*]}"
+        if $SUDO dnf install -y --skip-unavailable "${MISSING[@]}"; then
+            success "Packages installed."
+        else
+            warning "dnf reported an error installing one or more packages. Continuing anyway."
+        fi
+        for pkg in "${MISSING[@]}"; do
+            rpm -q --whatprovides "$pkg" >/dev/null 2>&1 || UNKNOWN_PACKAGES+=("$pkg")
+        done
+    fi
 elif ! command -v pacman >/dev/null 2>&1; then
     error "pacman was not found. This updater requires an Arch-based system."
     exit 1
@@ -199,17 +229,40 @@ consider() {
     CH_BACKUP+=("$backup")
 }
 
+LOCAL_TMP="$(mktemp -d)"
+trap 'rm -rf "$LOCAL_TMP"' EXIT
+
 while IFS= read -r -d '' file; do
     rel="${file#"$SRC"/}"
 
     # .zshrc is installed to ~/.zshrc (handled below), not ~/.config/.zshrc
     [[ "$rel" == ".zshrc" ]] && continue
 
+    # Local spicetify config holds this machine's Spotify paths; never replace it
+    [[ "$rel" == "spicetify/config-xpui.ini" && -f "$CONFIG_DIR/$rel" ]] && continue
+
+    # The wallpaper picker's folder is localised at install time (~/Imágenes/...);
+    # take the repo's file but keep the installed wallpaper_path
+    if [[ "$rel" == "quickshell/hyprquickpaper/config.json" && -f "$CONFIG_DIR/$rel" ]] \
+        && command -v jq >/dev/null 2>&1; then
+        wp="$(jq -r '.wallpaper_path' "$CONFIG_DIR/$rel" 2>/dev/null)"
+        if [[ -n "$wp" && "$wp" != "null" ]] \
+            && jq --arg p "$wp" '.wallpaper_path = $p' "$file" > "$LOCAL_TMP/config.json"; then
+            consider "$LOCAL_TMP/config.json" "$CONFIG_DIR/$rel" "$rel" "config/$rel"
+            continue
+        fi
+    fi
+
     consider "$file" "$CONFIG_DIR/$rel" "$rel" "config/$rel"
 done < <(find "$SRC" \( -type f -o -type l \) -not -path '*/.git/*' -print0 | sort -z)
 
 if [[ -f "$SRC/.zshrc" ]]; then
-    consider "$SRC/.zshrc" "$HOME/.zshrc" "~/.zshrc" "home/.zshrc"
+    # install.sh drops it into ~/.zshrc.d when ~/.zshrc sources that folder
+    if [[ -f "$HOME/.zshrc.d/85-43pr.zsh" ]]; then
+        consider "$SRC/.zshrc" "$HOME/.zshrc.d/85-43pr.zsh" "~/.zshrc.d/85-43pr.zsh" "home/85-43pr.zsh"
+    else
+        consider "$SRC/.zshrc" "$HOME/.zshrc" "~/.zshrc" "home/.zshrc"
+    fi
 fi
 
 ADDED_COUNT=0

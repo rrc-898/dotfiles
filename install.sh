@@ -3,29 +3,37 @@
 set -uo pipefail
 
 # 43PR/dotfiles installer
-# Arch-compatible Linux + Hyprland
+# Arch-compatible Linux or Fedora + Hyprland
 #
 # Usage:
 #   ./install.sh
 #
 # This script:
-#   1. Verifies that the system is Arch-based
+#   1. Verifies that the system is Arch-based or Fedora
 #   2. Detects the available package manager(s)
-#   3. Splits packages.txt into "official repo" vs "AUR-only" and
+#   3. Arch: splits packages.txt into "official repo" vs "AUR-only" and
 #      installs each with the right tool, so a single AUR-only or
-#      unresolvable name never aborts the whole install
+#      unresolvable name never aborts the whole install.
+#      Fedora: enables the Hyprland COPR and installs packages-fedora.txt
+#      with dnf, plus the few things Fedora doesn't package (starship,
+#      Nerd Fonts, papirus-folders) into ~/.local
 #   4. Backs up existing ~/.config
 #   5. Installs this repository's configuration
 #
 # Supported package managers:
 #   - pacman       (official repos: Arch, Manjaro, EndeavourOS, CachyOS, etc.)
 #   - paru / yay   (AUR helpers, optional but recommended)
+#   - dnf          (Fedora; COPR lionheartp/Hyprland for the Hyprland extras)
+#
+# Privilege escalation defaults to sudo. Set SUDO=pkexec to use the
+# graphical polkit prompt instead (e.g. when there is no TTY).
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="$HOME/.config"
 BACKUP_ROOT="$HOME/.config-backups"
 TIMESTAMP="$(date '+%Y-%m-%d_%H-%M-%S')"
 BACKUP_DIR="$BACKUP_ROOT/$TIMESTAMP"
+SUDO="${SUDO:-sudo}"
 
 # --------------------------------------------------
 # Colors / output
@@ -65,20 +73,29 @@ fi
 source /etc/os-release
 
 # Arch-compatible distributions normally identify themselves
-# through ID_LIKE=arch or ID=arch.
-if [[ "${ID:-}" != "arch" && "${ID_LIKE:-}" != *arch* ]]; then
-    error "This installer is intended for Arch-compatible Linux distributions."
+# through ID_LIKE=arch or ID=arch; Fedora through ID=fedora.
+if [[ "${ID:-}" == "arch" || "${ID_LIKE:-}" == *arch* ]]; then
+    DISTRO="arch"
+elif [[ "${ID:-}" == "fedora" ]]; then
+    DISTRO="fedora"
+else
+    error "This installer is intended for Arch-compatible Linux distributions or Fedora."
     error "Detected: ${PRETTY_NAME:-unknown}"
     exit 1
 fi
 
-if ! command -v sudo >/dev/null 2>&1; then
-    error "sudo is required."
+if ! command -v "${SUDO%% *}" >/dev/null 2>&1; then
+    error "$SUDO is required."
     exit 1
 fi
 
-if ! command -v pacman >/dev/null 2>&1; then
+if [[ "$DISTRO" == "arch" ]] && ! command -v pacman >/dev/null 2>&1; then
     error "pacman was not found. This installer requires an Arch-based system."
+    exit 1
+fi
+
+if [[ "$DISTRO" == "fedora" ]] && ! command -v dnf >/dev/null 2>&1; then
+    error "dnf was not found."
     exit 1
 fi
 
@@ -87,20 +104,99 @@ fi
 # --------------------------------------------------
 
 PACKAGE_FILE="$REPO_DIR/packages.txt"
+[[ "$DISTRO" == "fedora" ]] && PACKAGE_FILE="$REPO_DIR/packages-fedora.txt"
 
 if [[ ! -f "$PACKAGE_FILE" ]]; then
-    error "packages.txt not found."
+    error "$(basename "$PACKAGE_FILE") not found."
     exit 1
 fi
 
 AUR_HELPER=""
+OFFICIAL_PACKAGES=()
+AUR_PACKAGES=()
+UNKNOWN_PACKAGES=()
+
+info "Detected distribution: ${PRETTY_NAME:-unknown}"
+
+mapfile -t PACKAGES < <(
+    grep -vE '^[[:space:]]*(#|$)' "$PACKAGE_FILE"
+)
+
+# --------------------------------------------------
+# Fedora: dnf + COPR + things Fedora doesn't package
+# --------------------------------------------------
+
+install_nerd_font() {
+    # $1 = family name as fc-list reports it, $2 = nerd-fonts release asset
+    local family="$1" asset="$2" dir tmp
+    if fc-list : family | grep -qi "^$family"; then
+        info "$family already installed."
+        return
+    fi
+    dir="$HOME/.local/share/fonts/${asset%%.*}NerdFont"
+    tmp="$(mktemp -d)"
+    info "Installing $family into $dir..."
+    if curl -fsSL -o "$tmp/$asset" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/$asset"; then
+        mkdir -p "$dir"
+        tar -xJf "$tmp/$asset" -C "$dir" --wildcards '*.ttf'
+        fc-cache -f "$dir" >/dev/null
+        success "$family installed."
+    else
+        warning "Failed to download $asset."
+    fi
+    rm -rf "$tmp"
+}
+
+if [[ "$DISTRO" == "fedora" ]]; then
+    if ! dnf repolist 2>/dev/null | grep -q 'lionheartp:Hyprland'; then
+        info "Enabling COPR lionheartp/Hyprland (hyprlock, hyprpolkitagent, awww, cliphist, nwg-look)..."
+        $SUDO dnf copr enable -y lionheartp/Hyprland \
+            || warning "Could not enable the Hyprland COPR; some packages will fail."
+    fi
+
+    if [[ "${#PACKAGES[@]}" -gt 0 ]]; then
+        info "Installing packages with dnf..."
+        # --skip-unavailable: one missing name never aborts the whole install
+        if $SUDO dnf install -y --skip-unavailable "${PACKAGES[@]}"; then
+            success "Packages installed."
+        else
+            warning "dnf reported an error installing one or more packages. Continuing anyway."
+        fi
+        for pkg in "${PACKAGES[@]}"; do
+            rpm -q --whatprovides "$pkg" >/dev/null 2>&1 || UNKNOWN_PACKAGES+=("$pkg")
+        done
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+
+    if ! command -v starship >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/starship" ]]; then
+        info "Installing starship into ~/.local/bin..."
+        curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" >/dev/null \
+            && success "starship installed." \
+            || warning "Failed to install starship."
+    fi
+
+    install_nerd_font "JetBrainsMono Nerd Font" "JetBrainsMono.tar.xz"
+    install_nerd_font "Iosevka Nerd Font" "Iosevka.tar.xz"
+
+    if ! command -v papirus-folders >/dev/null 2>&1 && [[ ! -x "$HOME/.local/bin/papirus-folders" ]]; then
+        curl -fsSL -o "$HOME/.local/bin/papirus-folders" \
+            https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/papirus-folders \
+            && chmod +x "$HOME/.local/bin/papirus-folders" \
+            || warning "Failed to download papirus-folders."
+    fi
+
+    info "hyprmod is AUR-only and has no Fedora package; skipping it."
+fi
+
+if [[ "$DISTRO" == "arch" ]]; then
+
 if command -v paru >/dev/null 2>&1; then
     AUR_HELPER="paru"
 elif command -v yay >/dev/null 2>&1; then
     AUR_HELPER="yay"
 fi
-
-info "Detected distribution: ${PRETTY_NAME:-unknown}"
 
 if [[ -n "$AUR_HELPER" ]]; then
     info "AUR helper available: $AUR_HELPER"
@@ -129,14 +225,6 @@ fi
 # --------------------------------------------------
 # Packages: split into official-repo vs AUR-only
 # --------------------------------------------------
-
-mapfile -t PACKAGES < <(
-    grep -vE '^[[:space:]]*(#|$)' "$PACKAGE_FILE"
-)
-
-OFFICIAL_PACKAGES=()
-AUR_PACKAGES=()
-UNKNOWN_PACKAGES=()
 
 if [[ "${#PACKAGES[@]}" -eq 0 ]]; then
     warning "packages.txt does not contain any packages."
@@ -179,15 +267,18 @@ else
     fi
 fi
 
+fi # DISTRO == arch
+
 # --------------------------------------------------
 # Default shell
 # --------------------------------------------------
 
-if [[ -x /bin/zsh ]]; then
-    if [[ "$SHELL" != "/bin/zsh" ]]; then
+ZSH_BIN="$(command -v zsh || true)"
+if [[ -n "$ZSH_BIN" ]]; then
+    if [[ "$(basename "$SHELL")" != "zsh" ]]; then
         info "Setting Zsh as the default shell..."
 
-        if chsh -s /bin/zsh; then
+        if chsh -s "$ZSH_BIN"; then
             success "Default shell changed to Zsh."
             warning "Log out and back in for the shell change to take effect."
         else
@@ -221,6 +312,11 @@ if [[ -d "$CONFIG_DIR" ]]; then
         fi
     done
 
+    if [[ -e "$HOME/.zshrc" ]]; then
+        mkdir -p "$BACKUP_DIR/home"
+        cp -a "$HOME/.zshrc" "$BACKUP_DIR/home/"
+    fi
+
     success "Existing configuration backed up to:"
     printf '  %s\n' "$BACKUP_DIR"
 else
@@ -233,13 +329,36 @@ fi
 
 info "Installing dotfiles..."
 
+# The repo's spicetify config-xpui.ini carries the author's Spotify paths
+# (/opt/spotify, /home/rp34). Keep the local one and only switch the theme.
+SPICETIFY_INI="$CONFIG_DIR/spicetify/config-xpui.ini"
+SPICETIFY_KEEP=""
+if [[ -f "$SPICETIFY_INI" ]]; then
+    SPICETIFY_KEEP="$(mktemp)"
+    cp -a "$SPICETIFY_INI" "$SPICETIFY_KEEP"
+fi
+
 # Install ~/.config files
 cp -a "$REPO_DIR/.config/." "$CONFIG_DIR/"
+rm -f "$CONFIG_DIR/.zshrc"
 
-# Install ~/.zshrc
+if [[ -n "$SPICETIFY_KEEP" ]]; then
+    mv "$SPICETIFY_KEEP" "$SPICETIFY_INI"
+    sed -i -e 's/^current_theme .*/current_theme          = text/' \
+           -e 's/^color_scheme .*/color_scheme           = Monochrome/' "$SPICETIFY_INI"
+    info "Kept your spicetify paths; theme set to text/Monochrome (run 'spicetify apply')."
+fi
+
+# Install the zsh config. If ~/.zshrc sources ~/.zshrc.d (Fedora-style),
+# drop it in there instead of replacing a .zshrc that holds PATH and such.
 if [[ -f "$REPO_DIR/.config/.zshrc" ]]; then
-    cp "$REPO_DIR/.config/.zshrc" "$HOME/.zshrc"
-    success "Installed .zshrc."
+    if [[ -d "$HOME/.zshrc.d" ]] && grep -q 'zshrc\.d' "$HOME/.zshrc" 2>/dev/null; then
+        cp "$REPO_DIR/.config/.zshrc" "$HOME/.zshrc.d/85-43pr.zsh"
+        success "Installed zsh config as ~/.zshrc.d/85-43pr.zsh (your ~/.zshrc is untouched)."
+    else
+        cp "$REPO_DIR/.config/.zshrc" "$HOME/.zshrc"
+        success "Installed .zshrc."
+    fi
 else
     warning ".zshrc not found; skipping."
 fi
@@ -250,7 +369,19 @@ success "Dotfiles installed."
 # Papirus folder color
 # --------------------------------------------------
 
-if [[ -n "$AUR_HELPER" ]]; then
+if [[ "$DISTRO" == "fedora" ]]; then
+    PF="$(command -v papirus-folders || echo "$HOME/.local/bin/papirus-folders")"
+    if [[ -x "$PF" ]]; then
+        info "Setting Papirus folder color..."
+        if $SUDO "$PF" -C white --theme Papirus-Dark; then
+            success "Papirus folders set to white."
+        else
+            warning "Setting the Papirus folder color failed."
+        fi
+    else
+        warning "papirus-folders not available; skipping folder color."
+    fi
+elif [[ -n "$AUR_HELPER" ]]; then
     info "Installing Papirus folders..."
 
     if "$AUR_HELPER" -S --needed --noconfirm papirus-folders; then
@@ -276,14 +407,25 @@ if command -v xdg-user-dirs-update >/dev/null 2>&1; then
     xdg-user-dirs-update
 fi
 
-mkdir -p "$HOME/Pictures/Wallpapers"
+PICTURES_DIR="$(xdg-user-dir PICTURES 2>/dev/null || true)"
+[[ -n "$PICTURES_DIR" && "$PICTURES_DIR" != "$HOME" ]] || PICTURES_DIR="$HOME/Pictures"
+WALLPAPER_DIR="$PICTURES_DIR/Wallpapers"
+mkdir -p "$WALLPAPER_DIR"
+
+# Point the wallpaper picker at it (stored as $HOME/... like upstream)
+PAPER_CFG="$CONFIG_DIR/quickshell/hyprquickpaper/config.json"
+if [[ -f "$PAPER_CFG" ]] && command -v jq >/dev/null 2>&1; then
+    tmp="$(mktemp)"
+    jq --arg p "\$HOME/${WALLPAPER_DIR#"$HOME"/}/" '.wallpaper_path = $p' "$PAPER_CFG" > "$tmp" \
+        && mv "$tmp" "$PAPER_CFG"
+fi
 
 if [[ -d "$REPO_DIR/Wallpapers" ]]; then
     info "Installing wallpapers..."
-    cp -a "$REPO_DIR/Wallpapers/." "$HOME/Pictures/Wallpapers/"
+    cp -a "$REPO_DIR/Wallpapers/." "$WALLPAPER_DIR/"
     success "Wallpapers installed."
 else
-    warning "No Wallpapers directory in the repo; created an empty ~/Pictures/Wallpapers."
+    warning "No Wallpapers directory in the repo; created an empty $WALLPAPER_DIR."
 fi
 
 # --------------------------------------------------
@@ -371,7 +513,9 @@ printf '\033[1;32m========================================\033[0m\n'
 printf '\n'
 
 printf 'Distribution:  %s\n' "${PRETTY_NAME:-unknown}"
-printf 'AUR helper:    %s\n' "${AUR_HELPER:-none}"
+if [[ "$DISTRO" == "arch" ]]; then
+    printf 'AUR helper:    %s\n' "${AUR_HELPER:-none}"
+fi
 printf 'Configuration: %s\n' "$CONFIG_DIR"
 
 if [[ -d "$BACKUP_DIR" ]]; then

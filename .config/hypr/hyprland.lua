@@ -12,12 +12,15 @@ browser    = "brave"
 ---- AUTOSTART ----
 
 hl.on("hyprland.start", function()
+    -- Let systemd/D-Bus activated services (portals, polkit agent) see the session
+    hl.exec_cmd("dbus-update-activation-environment --systemd --all")
     hl.exec_cmd("waybar")
     hl.exec_cmd("dunst")
     hl.exec_cmd("nm-applet")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
-    hl.exec_cmd("/usr/lib/polkit-kde-authentication-agent-1")
+    -- hyprpolkitagent ships a user unit on both Arch and Fedora
+    hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
 
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd("sleep 2 && qs")

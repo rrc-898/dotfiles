@@ -1,0 +1,158 @@
+# 43PR/dotfiles — Fedora package list (equivalent of packages.txt)
+# Install e.g.: sudo dnf install cava
+#
+# Most names come from the official Fedora repos (fedora/updates).
+# A few Hyprland companions live only in the COPR lionheartp/Hyprland, which
+# install.sh enables automatically: hyprlock, hyprpolkitagent, awww,
+# cliphist, nwg-look.
+#
+# Not packaged for Fedora; install.sh handles them separately:
+#   starship          -> official installer into ~/.local/bin
+#   ttf-iosevka-nerd  -> Nerd Fonts release into ~/.local/share/fonts
+#   ttf-jetbrains-mono-nerd -> same
+#   papirus-folders   -> upstream script into ~/.local/bin
+#   hyprmod           -> AUR only, skipped (edit keybinds by hand)
+
+# --------------------------------------------------
+# Hyprland / Wayland / Desktop
+# --------------------------------------------------
+
+hyprland
+hyprlock
+hyprpolkitagent
+wlogout
+quickshell
+waybar
+rofi
+polkit
+qt6-qtwayland
+
+# --------------------------------------------------
+# Desktop Portals / X11 Compatibility / User Dirs
+# --------------------------------------------------
+
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+xorg-x11-server-Xwayland
+xdg-user-dirs
+xdg-utils
+
+# --------------------------------------------------
+# Wallpaper / Screenshots / Image Tools
+# --------------------------------------------------
+
+awww
+grim
+slurp
+ImageMagick
+matugen
+
+# --------------------------------------------------
+# Networking / Bluetooth
+# --------------------------------------------------
+
+NetworkManager
+network-manager-applet
+bluez
+
+# --------------------------------------------------
+# Audio
+# --------------------------------------------------
+
+pipewire
+pipewire-pulseaudio
+wireplumber
+playerctl
+
+# --------------------------------------------------
+# Clipboard
+# --------------------------------------------------
+
+cliphist
+wl-clipboard
+
+# --------------------------------------------------
+# Terminal / Shell
+# --------------------------------------------------
+
+kitty
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+eza
+
+# --------------------------------------------------
+# File Manager / File Utilities
+# --------------------------------------------------
+
+Thunar
+thunar-volman
+thunar-archive-plugin
+gvfs
+tumbler
+ffmpegthumbnailer
+xed
+ncdu
+
+# --------------------------------------------------
+# GTK / Theming / Icons / Appearance
+# --------------------------------------------------
+
+gtk3
+gtk4
+glib2
+dconf
+gsettings-desktop-schemas
+adw-gtk3-theme
+papirus-icon-theme
+nwg-look
+
+# --------------------------------------------------
+# Media
+# --------------------------------------------------
+
+mpv
+
+# --------------------------------------------------
+# System Monitoring / Hardware
+# --------------------------------------------------
+
+btop
+nvtop
+dmidecode
+brightnessctl
+gammastep
+lm_sensors
+
+# --------------------------------------------------
+# Desktop Notifications
+# --------------------------------------------------
+
+dunst
+libnotify
+
+# --------------------------------------------------
+# Terminal / System Visualizers
+# --------------------------------------------------
+
+cava
+fastfetch
+cmatrix
+
+# --------------------------------------------------
+# Fonts
+# --------------------------------------------------
+
+fontawesome-fonts-all
+google-roboto-mono-fonts
+
+# --------------------------------------------------
+# Scripting / Package / Application Utilities
+# --------------------------------------------------
+
+python3
+jq
+flatpak
+curl
+unzip
+xz

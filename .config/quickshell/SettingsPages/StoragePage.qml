@@ -16,6 +16,8 @@ Item {
     property string pendingAction: ""
     property string pendingTitle: ""
     property string pendingMessage: ""
+    // Fedora: dnf instead of pacman, and no AUR helper cache
+    property bool isDnf: false
 
     readonly property var cleanupDefaults: ({yay:0, pacman:0, journal:0, trash:0, flatpak:0, cliphist:0, thumbs:0})
     readonly property var sizeUnits: ({
@@ -115,11 +117,17 @@ Item {
     }
 
     Process {
+        running: true
+        command: ["sh", "-c", "command -v dnf"]
+        onExited: function(code) { page.isDnf = code === 0 }
+    }
+
+    Process {
         id: pCleanup
         command: [
             "sh", "-c",
             "printf 'YAY '; du -sb \"$HOME/.cache/yay\" 2>/dev/null | awk '{print $1}'; " +
-            "printf 'PACMAN '; du -sb /var/cache/pacman/pkg 2>/dev/null | awk '{print $1}'; " +
+            "printf 'PACMAN '; if command -v dnf >/dev/null; then du -sb /var/cache/libdnf5 2>/dev/null; else du -sb /var/cache/pacman/pkg 2>/dev/null; fi | awk '{print $1}'; " +
             "printf 'JOURNAL '; journalctl --disk-usage 2>/dev/null | grep -oE '[0-9.]+ (B|K|M|G|T)' | tail -1; " +
             "printf 'TRASH '; du -sb \"$HOME/.local/share/Trash\" 2>/dev/null | awk '{print $1}'; " +
             "printf 'FLATPAK '; flatpak uninstall --unused --assumeno 2>/dev/null | grep -oE '[0-9.]+ (kB|MB|GB|TB)' | tail -1; " +
@@ -371,22 +379,26 @@ Item {
                                 message: "CACHE_PLACEHOLDER",
                                 command: "rm -rf -- \"$HOME/.cache/yay/\"*"
                             },
-                            {
+                            page.isDnf ? {
+                                key: "pacman", label: "DNF CACHE", action: "CLEAN", title: "CLEAN DNF CACHE?",
+                                message: "dnf will remove cached package downloads and metadata.",
+                                command: "pkexec dnf clean all"
+                            } : {
                                 key: "pacman", label: "PACMAN CACHE", action: "CLEAN", title: "CLEAN PACMAN CACHE?",
                                 message: "paccache will remove old package versions while keeping the currently installed packages.",
-                                command: "sudo paccache -r"
+                                command: "pkexec paccache -r"
                             },
                             {
                                 key: "journal", label: "JOURNAL", action: "7 DAYS", title: "VACUUM JOURNAL?",
                                 message: "Keep only the last 7 days of system logs.",
-                                command: "sudo journalctl --vacuum-time=7d"
+                                command: "pkexec journalctl --vacuum-time=7d"
                             },
                             {
                                 key: "flatpak", label: "FLATPAK UNUSED", action: "CLEAN", title: "REMOVE UNUSED FLATPAKS?",
                                 message: "This removes unused Flatpak runtimes and packages.",
-                                command: "flatpak uninstall --unused"
+                                command: "flatpak uninstall --unused -y"
                             }
-                        ]
+                        ].filter(function(e) { return !(page.isDnf && e.key === "yay") })
 
                         delegate: CleanupButton {
                             required property var modelData

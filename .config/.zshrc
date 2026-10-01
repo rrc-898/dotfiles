@@ -1,20 +1,27 @@
-eval "$(starship init zsh)"
+# Safe to source on top of an existing config (e.g. from ~/.zshrc.d):
+# every block below skips itself if something equivalent is already loaded.
+
+[[ -n "${STARSHIP_SHELL:-}" ]] || eval "$(starship init zsh)"
 
 # Monochrome eza
 export EZA_COLORS="uu=bright-black:gu=bright-black:da=bright-black:ur=white:uw=bright-black:ux=white:ue=bright-black:gr=bright-black:gw=bright-black:gx=white:tr=bright-black:fi=white:di=bright-white:ln=bright-black:pi=bright-black:so=bright-black:bd=bright-black:cd=bright-black:or=bright-black:mi=bright-black:ex=white"
 
-alias ls='eza --icons'
-alias ll='eza -lah --icons --git'
-alias la='eza -a --icons'
-alias lt='eza --tree --icons'
+if ! alias ls >/dev/null 2>&1; then
+    alias ls='eza --icons'
+    alias ll='eza -lah --icons --git'
+    alias la='eza -a --icons'
+    alias lt='eza --tree --icons'
+fi
 
 
 # --------------------------------------------------
 # Completion
 # --------------------------------------------------
 
-autoload -Uz compinit
-compinit
+if (( ! ${+functions[compdef]} )); then
+    autoload -Uz compinit
+    compinit
+fi
 
 # Better completion menu
 zstyle ':completion:*' menu select
@@ -36,9 +43,10 @@ ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
 # History
 # --------------------------------------------------
 
-HISTFILE="$HOME/.zsh_history"
-HISTSIZE=10000
-SAVEHIST=10000
+# Never shrink a bigger history someone already configured
+HISTFILE="${HISTFILE:-$HOME/.zsh_history}"
+(( ${HISTSIZE:-0} >= 10000 )) || HISTSIZE=10000
+(( ${SAVEHIST:-0} >= 10000 )) || SAVEHIST=10000
 
 setopt APPEND_HISTORY
 setopt SHARE_HISTORY
@@ -46,10 +54,20 @@ setopt HIST_IGNORE_DUPS
 setopt HIST_IGNORE_SPACE
 setopt HIST_REDUCE_BLANKS
 
-source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+# Plugin paths: Arch uses /usr/share/zsh/plugins/<name>, Fedora /usr/share/<name>
+for _p in /usr/share/zsh/plugins/zsh-autosuggestions /usr/share/zsh-autosuggestions; do
+    if (( ! ${+functions[_zsh_autosuggest_start]} )) && [[ -r $_p/zsh-autosuggestions.zsh ]]; then
+        source $_p/zsh-autosuggestions.zsh
+    fi
+done
 
 # Syntax highlighting
-source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+for _p in /usr/share/zsh/plugins/zsh-syntax-highlighting /usr/share/zsh-syntax-highlighting; do
+    if (( ! ${+functions[_zsh_highlight]} )) && [[ -r $_p/zsh-syntax-highlighting.zsh ]]; then
+        source $_p/zsh-syntax-highlighting.zsh
+    fi
+done
+unset _p
 
 # Grayscale
 ZSH_HIGHLIGHT_STYLES[command]='fg=white'

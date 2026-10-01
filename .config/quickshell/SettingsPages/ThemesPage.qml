@@ -16,8 +16,10 @@ Item {
         console.log("Running theme:", themeName)
 
         Quickshell.execDetached([
-            "python3",
-            "/home/rp34/.config/43pr/bin/theme.py",
+            "/bin/sh",
+            "-c",
+            "python3 \"$HOME/.config/43pr/bin/theme.py\" \"$1\"",
+            "theme",
             themeName
         ])
     }
@@ -174,3 +176,4 @@ Item {
         }
     }
 }
+

@@ -12,15 +12,14 @@ browser    = os.getenv("HOME") .. "/.local/bin/zen"
 ---- AUTOSTART ----
 
 hl.on("hyprland.start", function()
-    -- Let systemd/D-Bus activated services (portals, polkit agent) see the session
-    hl.exec_cmd("dbus-update-activation-environment --systemd --all")
     hl.exec_cmd("waybar")
     hl.exec_cmd("dunst")
     hl.exec_cmd("nm-applet")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
-    -- hyprpolkitagent ships a user unit on both Arch and Fedora
-    hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
+    -- Export the session to systemd/D-Bus first: portals need it, and the
+    -- hyprpolkitagent user unit (Arch and Fedora) requires WAYLAND_DISPLAY
+    hl.exec_cmd("dbus-update-activation-environment --systemd --all && systemctl --user start hyprpolkitagent.service")
 
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd("sleep 2 && qs")

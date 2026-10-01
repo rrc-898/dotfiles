@@ -7,7 +7,7 @@ mainMod    = "SUPER"
 terminal   = "kitty"
 menu       = "rofi -show drun"
 fileManager = "thunar"
-browser    = "brave"
+browser    = os.getenv("HOME") .. "/.local/bin/zen"
 
 ---- AUTOSTART ----
 
@@ -36,7 +36,8 @@ hl.env("MOZ_ENABLE_WAYLAND", "1")
 
 hl.config({
     input = {
-        kb_layout = "us",
+        kb_layout = "es",
+        numlock_by_default = true,
         follow_mouse = 1,
         sensitivity = 0.5,
         touchpad = {

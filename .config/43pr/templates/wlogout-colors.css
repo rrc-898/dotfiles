@@ -6,6 +6,7 @@
 @define-color wl_active_bg      rgba({{wl_active_bg|rgba=0.18}});
 @define-color wl_focus_ring_full rgba({{wl_focus_ring|rgba=0.85}});
 @define-color wl_focus_ring_zero rgba({{wl_focus_ring|rgba=0}});
+#lock      { background-image: url("{{icon_dir}}/lock{{icon_suffix}}.png"); }
 #shutdown  { background-image: url("{{icon_dir}}/shutdown{{icon_suffix}}.png"); }
 #reboot    { background-image: url("{{icon_dir}}/reboot{{icon_suffix}}.png"); }
 #logout    { background-image: url("{{icon_dir}}/logout{{icon_suffix}}.png"); }

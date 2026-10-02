@@ -5,11 +5,11 @@ import QtQuick
 Item {
     id: root
     // top left corner: wlogout - top center: settings, rofi, wallpaper picker - top right: logoutmenu
-    property bool hyprlockEnabled: true 
+    property bool hyprlockEnabled: false  // ahora es el botón "lock" de wlogout
     property bool settingsEnabled: false  // ahora es el botón custom/settings de waybar
     property bool rofiEnabled: false
     property bool wallpaperEnabled: false
-    property bool wlogoutEnabled: true
+    property bool wlogoutEnabled: false  // solo con clic en custom/power de waybar
 
     property int triggerHeight: 10
     property color triggerColor: '#0037ff00'

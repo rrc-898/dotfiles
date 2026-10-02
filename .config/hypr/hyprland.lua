@@ -12,7 +12,8 @@ browser    = os.getenv("HOME") .. "/.local/bin/zen"
 ---- AUTOSTART ----
 
 hl.on("hyprland.start", function()
-    hl.exec_cmd("waybar")
+    -- Log para diagnosticar si waybar se cierra sola (ver ~/.cache/43pr/waybar.log)
+    hl.exec_cmd("mkdir -p ~/.cache/43pr && waybar >~/.cache/43pr/waybar.log 2>&1")
     hl.exec_cmd("dunst")
     hl.exec_cmd("nm-applet")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")

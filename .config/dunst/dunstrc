@@ -1,0 +1,69 @@
+# Dunst con la estética de 43PR (rofi/waybar): panel oscuro translúcido con blur,
+# borde fino de 1 px, esquinas de 10 px y JetBrainsMono.
+# Los colores NO van aquí: los genera `theme` en dunstrc.d/50-colors.conf
+# (plantilla ~/.config/43pr/templates/dunst-colors.conf) y siguen al fondo.
+
+[global]
+    monitor = 0
+    follow = mouse
+    layer = overlay
+    origin = top-right
+    # gaps_out de Hyprland = 8; la barra ya reserva su zona exclusiva
+    offset = (8, 8)
+    width = (280, 380)
+    height = (0, 220)
+    notification_limit = 5
+    gap_size = 6
+    corner_radius = 10
+    progress_bar_corner_radius = 4
+    progress_bar_height = 6
+    progress_bar_frame_width = 0
+    progress_bar_min_width = 150
+    progress_bar_max_width = 340
+
+    frame_width = 1
+    separator_height = 1
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 12
+
+    font = JetBrainsMono Nerd Font 10
+    line_height = 2
+    markup = full
+    format = "<b>%s</b>\n%b"
+    alignment = left
+    vertical_alignment = center
+    ellipsize = end
+    word_wrap = yes
+    ignore_newline = no
+    show_age_threshold = 60
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = no
+
+    icon_position = left
+    icon_theme = "Papirus-Dark, Adwaita"
+    enable_recursive_icon_lookup = true
+    min_icon_size = 32
+    max_icon_size = 48
+    icon_corner_radius = 8
+
+    sticky_history = yes
+    history_length = 30
+    idle_threshold = 120
+
+    mouse_left_click = do_action, close_current
+    mouse_middle_click = close_all
+    mouse_right_click = close_current
+
+    dmenu = /usr/bin/rofi -dmenu -p "acción"
+    browser = /usr/bin/xdg-open
+
+[urgency_low]
+    timeout = 4
+
+[urgency_normal]
+    timeout = 6
+
+[urgency_critical]
+    timeout = 0

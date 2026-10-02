@@ -27,3 +27,7 @@ output = "~/.config/gtk-4.0/colors.css"
 [quickshell]
 input  = "~/.config/43pr/templates/quickshell-theme.json"
 output = "~/.cache/43pr/quickshell-theme.json"
+[dunst]
+input  = "~/.config/43pr/templates/dunst-colors.conf"
+output = "~/.config/dunst/dunstrc.d/50-colors.conf"
+reload = ["dunstctl", "reload"]

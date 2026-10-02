@@ -1,0 +1,11 @@
+# Started by hyprland.lua once the session env is exported. It binds
+# graphical-session.target, which xdg-desktop-portal(-gtk/-hyprland) require:
+# without it the portals refuse to start and libadwaita apps never learn the
+# dark colour scheme (light sidebars, unreadable text). Deliberately not
+# hyprland-session.target, which other shells (e.g. DMS) hang their units on.
+[Unit]
+Description=43PR Hyprland session
+Documentation=man:systemd.special(7)
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target

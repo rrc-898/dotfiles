@@ -19,10 +19,10 @@ output = "~/.config/hypr/hyprlock-colors.conf"
 input  = "~/.config/43pr/templates/wlogout-colors.css"
 output = "~/.config/wlogout/colors.css"
 [gtk3]
-input  = "~/.config/43pr/templates/gtk-colors.css"
+input  = "~/.config/43pr/templates/gtk3-colors.css"
 output = "~/.config/gtk-3.0/colors.css"
 [gtk4]
-input  = "~/.config/43pr/templates/gtk-colors.css"
+input  = "~/.config/43pr/templates/gtk4-colors.css"
 output = "~/.config/gtk-4.0/colors.css"
 [quickshell]
 input  = "~/.config/43pr/templates/quickshell-theme.json"

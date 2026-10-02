@@ -19,7 +19,9 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
     -- Export the session to systemd/D-Bus first: portals need it, and the
     -- hyprpolkitagent user unit (Arch and Fedora) requires WAYLAND_DISPLAY
-    hl.exec_cmd("dbus-update-activation-environment --systemd --all && systemctl --user start hyprpolkitagent.service")
+    -- 43pr-session.target brings up graphical-session.target, which the portals
+    -- require (stop first: a Hyprland restart must not keep the old env)
+    hl.exec_cmd("systemctl --user stop 43pr-session.target; dbus-update-activation-environment --systemd --all && systemctl --user start 43pr-session.target hyprpolkitagent.service")
 
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd("sleep 2 && qs")

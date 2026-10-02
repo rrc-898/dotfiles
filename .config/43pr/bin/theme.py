@@ -224,6 +224,42 @@ def apply_palette(pal):
                 warn(f"reload {h} exited {r.returncode}")
         except Exception as e:
             warn(f"reload {h} failed: {e}")
+    sync_gtk_scheme(pal)
+
+
+def is_dark(hexcolor):
+    h = hexcolor.lstrip("#")[:6]
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
+
+
+def sync_gtk_scheme(pal):
+    """Keep GTK's light/dark switch in line with the palette just written.
+    The palette's bg decides (not the requested mode) so a dark preset never
+    lands on a light libadwaita/adw-gtk3 base, or vice versa."""
+    dark = is_dark(pal["bg"])
+    for key, val in (("color-scheme", "prefer-dark" if dark else "prefer-light"),
+                     ("gtk-theme", "adw-gtk3-dark" if dark else "adw-gtk3")):
+        try:
+            subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", key, val],
+                           stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
+        except Exception as e:
+            warn(f"gsettings {key} failed: {e}")
+    for v in ("gtk-3.0", "gtk-4.0"):
+        ini = CFG / v / "settings.ini"
+        if not ini.is_file():
+            continue
+        text = new = ini.read_text()
+        keys = {"gtk-application-prefer-dark-theme": str(int(dark))}
+        if v == "gtk-3.0":                         # GTK4/libadwaita ignores it
+            keys["gtk-theme-name"] = "adw-gtk3-dark" if dark else "adw-gtk3"
+        for k, val in keys.items():
+            if re.search(rf"(?m)^{k}=", new):
+                new = re.sub(rf"(?m)^{k}=.*$", f"{k}={val}", new)
+            else:
+                new = new.rstrip("\n") + f"\n{k}={val}\n"
+        if new != text:
+            atomic_write(ini, new)
 
 
 def ensure_fallback():

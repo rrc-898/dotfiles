@@ -1,24 +1,5 @@
+/* Colours come from colors.css (rendered by 43pr theme.py) as the theme's own
+ * named colours/variables. Put personal tweaks below the import, and never
+ * force `color` or `background` on broad selectors: a surface the selector
+ * misses keeps its stock colour and ends up unreadable. */
 @import "colors.css";
-window,
-.background,
-headerbar,
-.sidebar,
-.view,
-.titlebar,
-notebook,
-menu,
-.menu,
-popover,
-.toolbar,
-textview,
-textview text,
-treeview,
-treeview.view,
-treeview.view text {
-    background-color: @gtk_bg;
-    background-image: none;
-}
-
-* {
-    color: @gtk_fg;
-}

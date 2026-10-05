@@ -82,6 +82,10 @@ PanelWindow {
             root.selectedIndex = 3
             root.show()
         }
+        function themes(): void {
+            root.selectedIndex = 7
+            root.show()
+        }
         function snapTop(): void {
             root.snapTop()
         }

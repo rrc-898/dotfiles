@@ -1,5 +1,5 @@
-name = "43pr-default"
-description = "The original 43PR look, extracted from the repo"
+name = "43PR Original"
+description = "Original 43PR: pure black and white, high contrast"
 override = false   # true = wallpaper changes will NOT replace this preset
 
 [colors]

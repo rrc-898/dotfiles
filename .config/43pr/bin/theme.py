@@ -20,6 +20,9 @@ HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 TOKEN = re.compile(r"\{\{\s*([A-Za-z0-9_]+)((?:\s*\|\s*[a-z0-9]+(?:=[0-9a-fA-Fx.]+)?)*)\s*\}\}")
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+SCHEME_TYPES = ("scheme-content", "scheme-expressive", "scheme-fidelity", "scheme-fruit-salad",
+                "scheme-monochrome", "scheme-neutral", "scheme-rainbow", "scheme-tonal-spot",
+                "scheme-vibrant")
 
 
 def die(msg):
@@ -142,7 +145,11 @@ def from_wallpaper(path):
     if not shutil.which("matugen"):
         raise RuntimeError("matugen is not installed")
 
-    scheme_type = os.environ.get("MATUGEN_TYPE") or probe_scheme_type(path)
+    st = load_state()
+    scheme_type = os.environ.get("MATUGEN_TYPE") or st.get("matugen_type", "auto")
+    if scheme_type == "auto":
+        scheme_type = probe_scheme_type(path)
+    contrast = float(st.get("matugen_contrast", 0))
 
     MATUGEN_OUT.parent.mkdir(parents=True, exist_ok=True)
     MATUGEN_OUT.unlink(missing_ok=True)   # never trust a stale file
@@ -150,6 +157,8 @@ def from_wallpaper(path):
            "-m", current_mode(),
            "-t", scheme_type,
            "--source-color-index", "0", "-q"]
+    if contrast:
+        cmd += ["--contrast", f"{contrast:g}"]
     r = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
     if r.returncode != 0:
         raise RuntimeError(f"matugen failed: {(r.stderr or r.stdout).strip()}")
@@ -199,7 +208,7 @@ def apply_palette(pal):
     hooks = []
     render_vars = dict(pal)
     render_vars["icon_dir"] = str(HOME / ".config" / "wlogout" / "icons")
-    render_vars["icon_suffix"] = "2" if current_mode() == "light" else ""
+    render_vars["icon_suffix"] = "" if is_dark(pal["bg"]) else "2"   # dark icons on light bgs
     try:
         staged = []
         for name, t in targets.items():           # 1. render everything first
@@ -315,10 +324,23 @@ def cmd_preset(a):
     print(f"theme: preset '{a.name}' applied")
 
 
+def shown_wallpaper():
+    """The image awww is displaying right now, if it can tell."""
+    try:
+        r = subprocess.run(["awww", "query"], stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=5)
+        m = re.search(r"currently displaying: image: (.+)$", r.stdout, re.M)
+        if m and Path(m.group(1).strip()).is_file():
+            return m.group(1).strip()
+    except Exception:
+        pass
+    return None
+
+
 def cmd_auto(a):
-    """Back to wallpaper-driven mode, re-generating from the last wallpaper."""
+    """Back to wallpaper-driven mode, re-generating from the shown (or last) wallpaper."""
     st = load_state()
-    wp = st.get("wallpaper")
+    wp = shown_wallpaper() or st.get("wallpaper")
     if not wp:
         die("no wallpaper recorded yet; pick one first")
     a.path = wp
@@ -351,8 +373,62 @@ def cmd_mode(a):
         print(f"theme: mode set to {a.value} (no wallpaper active; will apply on next 'wallpaper' or 'auto')")
 
 
+def cmd_matugen(a):
+    """Set matugen's scheme type / contrast and switch back to wallpaper colours."""
+    st = load_state()
+    if a.type is not None:
+        if a.type != "auto" and a.type not in SCHEME_TYPES:
+            die(f"unknown scheme type: {a.type} (auto, {', '.join(SCHEME_TYPES)})")
+        st["matugen_type"] = a.type
+    if a.mode is not None:
+        if a.mode not in ("dark", "light"):
+            die("mode must be 'dark' or 'light'")
+        st["mode_appearance"] = a.mode
+    if a.contrast is not None:
+        if not -1 <= a.contrast <= 1:
+            die("contrast must be between -1 and 1")
+        st["matugen_contrast"] = a.contrast
+    save_state(st)
+    cmd_auto(a)
+
+
+def swatch(colors):
+    return [colors[k] for k in ("bg", "bg_card", "fg", "accent", "highlight", "ok", "danger")]
+
+
+def list_json(st):
+    presets = []
+    for p in sorted(THEMES.glob("*.toml"), key=lambda p: (p.stem == "default", p.stem)):
+        try:
+            d = load_toml(p)
+            colors = merged(d.get("colors", {}))
+        except Exception as e:
+            warn(f"skipping {p.name}: {e}")
+            continue
+        presets.append({"id": p.stem, "name": d.get("name", p.stem), "description": d.get("description", ""),
+                        "pinned": bool(d.get("override")), "dark": is_dark(colors["bg"]),
+                        "swatch": swatch(colors),
+                        "active": st.get("mode") == "preset" and st.get("preset") == p.stem})
+    mat = None
+    try:
+        src = PALETTE if st.get("mode") == "wallpaper" else MATUGEN_OUT
+        mat = swatch(merged(json.loads(src.read_text())))
+    except Exception:
+        pass
+    print(json.dumps({
+        "mode": st.get("mode", "wallpaper"),
+        "appearance": st.get("mode_appearance", "dark"),
+        "matugen_type": st.get("matugen_type", "auto"),
+        "matugen_contrast": float(st.get("matugen_contrast", 0)),
+        "matugen_swatch": mat,
+        "presets": presets,
+    }))
+
+
 def cmd_list(a):
     st = load_state()
+    if a.json:
+        return list_json(st)
     for p in sorted(THEMES.glob("*.toml")):
         d = load_toml(p)
         mark = "*" if st.get("mode") == "preset" and st.get("preset") == p.stem else " "
@@ -398,7 +474,9 @@ def main():
     s = sp.add_parser("auto"); s.set_defaults(f=cmd_auto)
     s = sp.add_parser("apply"); s.set_defaults(f=cmd_apply)
     s = sp.add_parser("mode"); s.add_argument("value"); s.set_defaults(f=cmd_mode)
-    s = sp.add_parser("list"); s.set_defaults(f=cmd_list)
+    s = sp.add_parser("list"); s.add_argument("--json", action="store_true"); s.set_defaults(f=cmd_list)
+    s = sp.add_parser("matugen"); s.add_argument("--type"); s.add_argument("--contrast", type=float)
+    s.add_argument("--mode");     s.set_defaults(f=cmd_matugen)
     s = sp.add_parser("new"); s.add_argument("name")
     s.add_argument("source", nargs="?", default="default"); s.set_defaults(f=cmd_new)
     s = sp.add_parser("status"); s.set_defaults(f=cmd_status)

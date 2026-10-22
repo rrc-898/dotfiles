@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import "../"
 
@@ -16,6 +17,12 @@ Item {
         state: "disconnected",
         connection: ""
     })
+
+    // VPNs (from ~/.config/hypr/scripts/vpn.sh list)
+    property var vpns: []
+    property string vpnBusy: ""
+    property string vpnMessage: ""
+    readonly property string vpnScript: Quickshell.env("HOME") + "/.config/hypr/scripts/vpn.sh"
 
     // Fonts
     property string monoFont: "JetBrains Mono"
@@ -38,6 +45,7 @@ Item {
     readonly property string icWifi: "\uf1eb"
     readonly property string icLock: "\uf023"
     readonly property string icEth: "\uf6ff"
+    readonly property string icVpn: "\uf132"
 
     function formatSpeed(bps) {
         if (bps < 1024) return bps.toFixed(0) + " B/s"
@@ -259,10 +267,70 @@ Item {
         pConnect.running = true
     }
 
+    // ── VPN list / connect ───────────────────────────────────────
+    Process {
+        id: pVpnList
+        command: ["bash", page.vpnScript, "list"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var out = []
+                var lines = text.trim().split("\n")
+
+                for (var i = 0; i < lines.length; ++i) {
+                    var fields = lines[i].split("|")
+                    if (fields.length < 4 || !fields[0]) continue
+
+                    out.push({
+                        name: fields[0],
+                        kind: fields[1],
+                        active: fields[2] === "yes",
+                        detail: fields[3]
+                    })
+                }
+
+                page.vpns = out
+            }
+        }
+
+        stderr: StdioCollector {}
+    }
+
+    Timer {
+        interval: 3000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: if (!pVpnList.running) pVpnList.running = true
+    }
+
+    Process {
+        id: pVpnAction
+
+        stdout: StdioCollector { id: vpnOut }
+        stderr: StdioCollector { id: vpnErr }
+
+        onExited: function(exitCode) {
+            var msg = (vpnErr.text.trim() || vpnOut.text.trim()).split("\n")
+            page.vpnMessage = exitCode !== 0 ? msg[msg.length - 1] : ""
+            page.vpnBusy = ""
+            pVpnList.running = true
+        }
+    }
+
+    function vpnToggle(vpn) {
+        if (page.vpnBusy) return
+        page.vpnMessage = ""
+        page.vpnBusy = vpn.name
+        pVpnAction.command = ["bash", page.vpnScript, vpn.active ? "down" : "up", vpn.name]
+        pVpnAction.running = true
+    }
+
     Component.onCompleted: {
         pRadioGet.running = true
         pList.running = true
         pEthernet.running = true
+        pVpnList.running = true
     }
 
     Column {
@@ -447,11 +515,106 @@ Item {
             }
         }
 
+        // ── VPN cards (UPV + NetworkManager VPNs) ───────────────
+        Column {
+            id: vpnSection
+            width: parent.width
+            spacing: 6
+
+            Repeater {
+                model: page.vpns
+
+                delegate: Rectangle {
+                    required property var modelData
+                    readonly property bool busy: page.vpnBusy === modelData.name
+                    width: vpnSection.width
+                    height: 46
+                    radius: Theme.radius
+                    color: modelData.active
+                        ? Theme.alpha(Theme.accent2, 0.10)
+                        : "#00000000"
+                    border.width: 1
+                    border.color: modelData.active || busy ? Theme.accent2 : Theme.border
+
+                    Text {
+                        id: vpnBtn
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 84
+                        text: busy ? "WAIT..." : (modelData.active ? "DISCONNECT" : "CONNECT")
+                        color: busy ? Theme.textDim : (modelData.active ? Theme.danger : Theme.accent)
+                        font.family: page.monoFont
+                        font.pixelSize: 10
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: !page.vpnBusy
+                            onClicked: page.vpnToggle(modelData)
+                        }
+                    }
+
+                    Row {
+                        anchors.left: vpnBtn.right
+                        anchors.leftMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 9
+
+                        Text {
+                            text: page.icVpn
+                            color: modelData.active ? Theme.accent2 : Theme.textDim
+                            font.family: Theme.iconFont
+                            font.pixelSize: 14
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 2
+
+                            Text {
+                                text: "VPN " + modelData.name
+                                color: Theme.text
+                                font.family: page.monoFont
+                                font.pixelSize: 12
+                            }
+
+                            Text {
+                                text: busy && modelData.kind === "upv" && !modelData.active
+                                    ? "Aprueba el doble factor en el móvil..."
+                                    : (page.vpnMessage && !busy && !modelData.active
+                                        ? page.vpnMessage
+                                        : modelData.detail)
+                                color: page.vpnMessage && !busy && !modelData.active
+                                    ? Theme.danger : Theme.textDim
+                                font.family: page.monoFont
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                                width: Math.min(implicitWidth, vpnSection.width - 260)
+                            }
+                        }
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.active ? "CONNECTED" : "DISCONNECTED"
+                        color: modelData.active ? Theme.accent2 : Theme.textDim
+                        font.family: page.monoFont
+                        font.pixelSize: 10
+                        font.letterSpacing: 1
+                    }
+                }
+            }
+        }
+
         // ── Wi-Fi network list ───────────────────────────────────
         Item {
             id: listContainer
             width: parent.width
-            height: parent.height - header.height - 1 - statsRow.height - ethCard.height - 4 * 9
+            height: parent.height - header.height - 1 - statsRow.height - ethCard.height
+                - (page.vpns.length ? vpnSection.height + 9 : 0) - 4 * 9
 
             Flickable {
                 anchors.fill: parent
